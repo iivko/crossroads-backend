@@ -6,9 +6,9 @@ Everyone uses the same marketplace on the host computer. Each business runs its 
 
 Connect to the same Wi-Fi/LAN as the host, then open:
 
-- Dashboard: **http://192.168.68.109:3100**
-- API documentation: **http://192.168.68.109:8100/docs**
-- API root: `http://192.168.68.109:8100/api/v1`
+- Dashboard: **http://172.20.10.3:3100**
+- API documentation: **http://172.20.10.3:8100/docs**
+- API root: `http://172.20.10.3:8100/api/v1`
 
 The host computer must remain awake and Docker must remain running. These are LAN addresses, not public internet links. Use this HTTP setup for the trusted team demo; the explicit CLI/MCP LAN setting below does not encrypt traffic.
 
@@ -44,7 +44,7 @@ If you already have the checkout, use `git pull --ff-only`, then refresh the ins
 In every CLI/agent terminal using the LAN, set:
 
 ```sh
-export MARKET_API_URL='http://192.168.68.109:8100'
+export MARKET_API_URL='http://172.20.10.3:8100'
 export MARKET_ALLOW_LAN_HTTP=true
 ```
 
@@ -58,7 +58,7 @@ The simplest route is the dashboard:
 2. Open **Connections**.
 3. Give your connection a recognizable name, such as `Maya laptop buyer`.
 4. Enable **Allow agent trading** before creating it. Read-only credentials cannot submit offers or create requests.
-5. Check the backend API address is `http://192.168.68.109:8100/api/v1` and enable **Allow HTTP on this trusted LAN**. This is required for the LAN HTTP endpoint, including when you intend to use the issued token with the CLI.
+5. Check the backend API address is `http://172.20.10.3:8100/api/v1` and enable **Allow HTTP on this trusted LAN**. This is required for the LAN HTTP endpoint, including when you intend to use the issued token with the CLI.
 6. Click **Create connection**. Save the token privately; it is returned only once.
 
 The buyer token receives buyer request and negotiation permissions. A seller trading token receives its own product and negotiation permissions. Neither can change policies, issue more credentials or approve an order. The dashboard's seller trading token does not include image upload permission; use the owner CLI or the separate seller-agent credential described below for uploads.
@@ -66,7 +66,7 @@ The buyer token receives buyer request and negotiation permissions. A seller tra
 On the agent laptop, open a fresh Bash terminal and supply only that business's token:
 
 ```sh
-export MARKET_API_URL='http://192.168.68.109:8100'
+export MARKET_API_URL='http://172.20.10.3:8100'
 export MARKET_ALLOW_LAN_HTTP=true
 export MARKET_WORKSPACE='ws-buyer'  # Seller A: ws-forma; Seller B: ws-nord
 export MARKET_CONFIG="$HOME/.config/neopact-agent/config.json"
@@ -87,7 +87,7 @@ Keep human passwords, browser sessions and owner CLI profiles outside the agent'
 Do this in a separate human-operated terminal, not the terminal used to launch your LLM:
 
 ```sh
-export MARKET_API_URL='http://192.168.68.109:8100'
+export MARKET_API_URL='http://172.20.10.3:8100'
 export MARKET_ALLOW_LAN_HTTP=true
 export MARKET_CONFIG="$HOME/.config/neopact-owner/config.json"
 unset MARKET_TOKEN MARKET_WORKSPACE
@@ -328,7 +328,7 @@ The CLI is sufficient. If your agent host prefers MCP, run the backend's MCP ada
 git clone https://github.com/iivko/crossroads-backend.git
 cd crossroads-backend
 uv sync --frozen --extra mcp
-export NEOPACT_MCP_API_URL='http://192.168.68.109:8100/api/v1'
+export NEOPACT_MCP_API_URL='http://172.20.10.3:8100/api/v1'
 export NEOPACT_MCP_ALLOW_LAN_HTTP=true
 export NEOPACT_MCP_WORKSPACE='ws-buyer'  # Use your own workspace
 read -r -s -p 'Agent token: ' NEOPACT_MCP_TOKEN
@@ -345,7 +345,7 @@ Configure your local MCP host to launch `uv --directory /ABSOLUTE/PATH/crossroad
       "command": "uv",
       "args": ["--directory","/ABSOLUTE/PATH/crossroads-backend","run","--extra","mcp","python","-m","mcp_server"],
       "env": {
-        "NEOPACT_MCP_API_URL": "http://192.168.68.109:8100/api/v1",
+        "NEOPACT_MCP_API_URL": "http://172.20.10.3:8100/api/v1",
         "NEOPACT_MCP_ALLOW_LAN_HTTP": "true",
         "NEOPACT_MCP_WORKSPACE": "ws-buyer"
       }
@@ -354,7 +354,7 @@ Configure your local MCP host to launch `uv --directory /ABSOLUTE/PATH/crossroad
 }
 ```
 
-Supply `NEOPACT_MCP_TOKEN` through the host's private environment/secret mechanism. Desktop applications may not inherit terminal variables; follow the repository's `mcp_server/README.md` for a private launcher. Replace the absolute path and workspace. In the dashboard's Connections setup, check the editable API address points to `http://192.168.68.109:8100/api/v1`, enable **Allow HTTP on this trusted LAN**, and use the backend clone's absolute path on your own laptop. The generated configuration then contains the LAN setting. Your teammate's laptop must not use the host computer's checkout path.
+Supply `NEOPACT_MCP_TOKEN` through the host's private environment/secret mechanism. Desktop applications may not inherit terminal variables; follow the repository's `mcp_server/README.md` for a private launcher. Replace the absolute path and workspace. In the dashboard's Connections setup, check the editable API address points to `http://172.20.10.3:8100/api/v1`, enable **Allow HTTP on this trusted LAN**, and use the backend clone's absolute path on your own laptop. The generated configuration then contains the LAN setting. Your teammate's laptop must not use the host computer's checkout path.
 
 Call `get_instructions`, `get_inbox` and `search_catalogue` to confirm it is connected. The MCP adapter uses the same role rules and does not run an LLM. Its `get_product_images` returns metadata only; use the image-reading CLI and your model's image tool to inspect real bytes. This is a local stdio MCP server, not a hosted ChatGPT/Claude web connector.
 
@@ -362,7 +362,7 @@ Call `get_instructions`, `get_inbox` and `search_catalogue` to confirm it is con
 
 | Symptom | What to do |
 |---|---|
-| Teammate cannot open dashboard | Use `192.168.68.109`, not `localhost`; join the same non-guest LAN; check VPN/client isolation, host sleep and host firewall. The operator must allow inbound TCP 3100 and 8100 from the local network. |
+| Teammate cannot open dashboard | Use `172.20.10.3`, not `localhost`; join the same non-guest LAN; check VPN/client isolation, host sleep and host firewall. The operator must allow inbound TCP 3100 and 8100 from the local network. |
 | `insecure_url` | Update CLI, set `MARKET_ALLOW_LAN_HTTP=true`, and use the exact private IPv4 address. MCP has its own opt-in. |
 | Unauthorized after reset | Sign in again and issue a new credential. Verify the token belongs to the intended business. |
 | Permission denied | Check `auth whoami`; read-only tokens cannot negotiate. Use an owner for policies/credential issuance, an appropriate seller token for image writes, and a human browser for approvals. |
@@ -390,9 +390,9 @@ The ignored backend `.env` selects `compose.yaml:compose.lan.yaml` through `COMP
 
 ```dotenv
 COMPOSE_FILE=compose.yaml:compose.lan.yaml
-LAN_BIND_IP=192.168.68.109
-FRONTEND_URL=http://192.168.68.109:3100
-ALLOWED_ORIGINS=http://localhost:3100,http://127.0.0.1:3100,http://192.168.68.109:3100
+LAN_BIND_IP=172.20.10.3
+FRONTEND_URL=http://172.20.10.3:3100
+ALLOWED_ORIGINS=http://localhost:3100,http://127.0.0.1:3100,http://172.20.10.3:3100
 COOKIE_SECURE=false
 ```
 
