@@ -1,0 +1,52 @@
+version: 1.3.1
+cache: true
+
+interface:
+  customWelcome: "Your agents negotiate. Your business decides."
+  endpointsMenu: true
+  modelSelect: true
+  parameters: true
+  presets: true
+  sidePanel: true
+  bookmarks: true
+  multiConvo: false
+  agents: true
+  fileSearch: false
+
+endpoints:
+  agents:
+    recursionLimit: 25
+    maxRecursionLimit: 50
+    capabilities: ["tools"]
+  custom:
+    - name: xAI
+      apiKey: user_provided
+      baseURL: https://api.x.ai/v1
+      models:
+        default: []
+        fetch: true
+      titleConvo: false
+      modelDisplayLabel: Grok
+
+mcpServers:
+  neopact:
+    type: stdio
+    command: /opt/neopact/.venv/bin/python
+    args: ["-m", "mcp_server"]
+    startup: false
+    serverInstructions: true
+    timeout: 30000
+    initTimeout: 30000
+    env:
+      PYTHONPATH: /opt/neopact
+      NEOPACT_MCP_API_URL: "${NEOPACT_MCP_API_URL}"
+      NEOPACT_MCP_ALLOW_LAN_HTTP: "true"
+      NEOPACT_MCP_WORKSPACE: "{{NEOPACT_WORKSPACE}}"
+      NEOPACT_MCP_TOKEN: "{{NEOPACT_TOKEN}}"
+    customUserVars:
+      NEOPACT_WORKSPACE:
+        title: Workspace ID
+        description: "Copy the workspace ID from your marketplace Connections page (for example ws-buyer or ws-forma)."
+      NEOPACT_TOKEN:
+        title: Marketplace agent token
+        description: "Create a restricted agent credential in marketplace Connections. Enable Allow agent trading there if you want to negotiate. Paste the am_ token here, never in a chat message."

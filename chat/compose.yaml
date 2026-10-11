@@ -1,0 +1,55 @@
+name: neopact-chat
+
+services:
+  chat:
+    image: neopact-chat:local
+    build:
+      context: ..
+      dockerfile: chat/Dockerfile
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3080"
+      NODE_ENV: production
+      MONGO_URI: mongodb://mongodb:27017/neopact_chat
+      CONFIG_PATH: /app/librechat.yaml
+    ports:
+      - "127.0.0.1:${CHAT_PORT:-3080}:3080"
+      - "${LAN_BIND_IP:?Run python3 manage.py start first}:${CHAT_PORT:-3080}:3080"
+    volumes:
+      - ./librechat.yaml:/app/librechat.yaml:ro
+      - chat-data:/app/data
+      - chat-uploads:/app/uploads
+      - chat-images:/app/client/public/images
+      - chat-logs:/app/logs
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  mongodb:
+    image: mongo:8.0.20
+    command: ["mongod", "--noauth", "--bind_ip_all"]
+    volumes:
+      - chat-mongodb:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand('ping').ok ? 0 : 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  chat-data:
+  chat-uploads:
+  chat-images:
+  chat-logs:
+  chat-mongodb:
