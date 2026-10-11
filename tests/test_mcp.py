@@ -13,11 +13,15 @@ pytest.importorskip("fastmcp", reason="Install the MCP extra to run the MCP prot
 # ruff: noqa: E402
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
+from fastmcp.server.dependencies import get_context
+from mcp.shared.exceptions import McpError
+from mcp.types import CancelledNotification, CancelledNotificationParams, ClientNotification
 from response_helpers import response_data
 
 from market.auth import ROLE_SCOPES
 from market.config import settings
 from market.main import app
+from mcp_server import server as server_module
 from mcp_server.client import Marketplace
 from mcp_server.config import Configuration, ConfigurationError
 from mcp_server.server import create_server
@@ -150,7 +154,7 @@ def test_tools_and_real_readonly_scope(client):
         async with Client(server(issued)) as mcp:
             tools = await mcp.list_tools()
             names = {tool.name for tool in tools}
-            assert len(names) == 13
+            assert len(names) == 16
             assert not names & {
                 "approve_order",
                 "approve",
@@ -182,6 +186,45 @@ def test_tools_and_real_readonly_scope(client):
             read = await mcp.call_tool("get_inbox", raise_on_error=False)
             assert read.is_error
             assert "unauthenticated" in read.content[0].text
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("category,material", [("desks", "wood"), ("laptops", "mixed")])
+def test_seller_can_create_products_and_buyer_can_filter_by_category(client, category, material):
+    seller, _ = agent(client, "nord")
+    buyer, _ = agent(client, scopes=["catalogue:read"])
+
+    async def run():
+        async with Client(server(seller)) as s, Client(server(buyer)) as b:
+            product = await s.call_tool(
+                "create_product",
+                {
+                    "product": {
+                        "name": "Office product",
+                        "sku": "MCP-PRODUCT-01",
+                        "category": category,
+                        "attributes": {"material": material, "stackable": False, "color": "Natural"},
+                        "unit_price": 20000,
+                        "delivery_charge": 2500,
+                        "lead_days": 3,
+                        "destinations": ["Sofia"],
+                        "stock": 10,
+                        "published": True,
+                    },
+                    "idempotency_key": str(uuid4()),
+                },
+            )
+            found = (
+                await b.call_tool("search_catalogue", {"category": category, "material": material})
+            ).structured_content
+            assert found["total"] == 1
+            assert found["items"][0]["id"] == product.structured_content["id"]
+            chairs = (await b.call_tool("search_catalogue", {"category": "chairs"})).structured_content
+            assert chairs["total"] == 3
+            assert all(p["category"] == "chairs" for p in chairs["items"])
+            cabinets = (await b.call_tool("search_catalogue", {"category": "cabinets"})).structured_content
+            assert cabinets["total"] == 0
 
     asyncio.run(run())
 
@@ -242,5 +285,160 @@ def test_buyer_seller_isolation_and_action_guards(client):
                 "submit_action", {"room_id": room_id, "action": action, "idempotency_key": key}
             )
             assert result.structured_content == again.structured_content
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("account", ["buyer", "forma"])
+def test_mcp_prompt_is_same_as_api_role_scoped_and_rechecks_revocation(client, account):
+    issued, admin = agent(client, account, scopes=["negotiations:read"])
+    payload = {"objective": "Find the best feasible delivery terms", "mode": "resume"}
+    expected = response_data(
+        client.post(
+            BASE + "/agent/prompt",
+            headers={"Authorization": "Bearer " + issued["token"]},
+            json=payload,
+        )
+    )
+
+    async def run():
+        async with Client(server(issued)) as mcp:
+            prompts = await mcp.list_prompts()
+            assert [p.name for p in prompts] == ["neopact_negotiator"]
+            assert {a.name for a in prompts[0].arguments} == {"objective", "room_id", "request_id", "mode"}
+            result = await mcp.get_prompt("neopact_negotiator", payload)
+            assert len(result.messages) == 1
+            assert result.messages[0].role == "user"
+            assert result.messages[0].content.text == expected["prompt"]
+            assert issued["token"] not in result.messages[0].content.text
+            revoked = client.delete(BASE + "/credentials/" + issued["id"], headers=admin)
+            assert revoked.status_code == 200
+            with pytest.raises(McpError):
+                await mcp.get_prompt("neopact_negotiator", payload)
+
+    asyncio.run(run())
+
+
+def test_purchase_inspection_tools_preserve_buyer_ownership_and_seller_denial(client):
+    buyer, _ = agent(client)
+    readonly, _ = agent(client, scopes=["negotiations:read"])
+    seller, _ = agent(client, "forma")
+
+    async def run():
+        async with Client(server(buyer)) as b, Client(server(seller)) as s, Client(server(readonly)) as r:
+            result = await b.call_tool(
+                "create_request", {"request": request_data(), "idempotency_key": str(uuid4())}
+            )
+            request_id = result.structured_content["id"]
+            listed = (await b.call_tool("list_purchase_requests", {"limit": 1})).structured_content
+            assert listed["total"] == 1 and listed["items"][0]["id"] == request_id
+            detail = (
+                await b.call_tool("get_purchase_request", {"request_id": request_id})
+            ).structured_content
+            assert detail["request"]["state"] == "draft"
+            prompt = await b.get_prompt("neopact_negotiator", {"request_id": request_id})
+            assert request_id in prompt.messages[0].content.text
+            for client_ in (s, r):
+                denied = await client_.call_tool("list_purchase_requests", raise_on_error=False)
+                assert denied.is_error and "permission_denied" in denied.content[0].text
+                denied = await client_.call_tool(
+                    "get_purchase_request", {"request_id": request_id}, raise_on_error=False
+                )
+                assert denied.is_error and "permission_denied" in denied.content[0].text
+            with pytest.raises(McpError):
+                await s.get_prompt("neopact_negotiator", {"request_id": request_id})
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("revoke_during_wait", [False, True])
+def test_wait_reads_fresh_inbox_after_exactly_twenty_seconds(client, monkeypatch, revoke_during_wait):
+    issued, admin = agent(client)
+    sleeps = []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+        if revoke_during_wait:
+            assert client.delete(BASE + "/credentials/" + issued["id"], headers=admin).status_code == 200
+        else:
+            created = response_data(
+                client.post(
+                    BASE + "/requests",
+                    headers={**admin, "Idempotency-Key": str(uuid4())},
+                    json=request_data(),
+                )
+            )
+            launched = client.post(
+                BASE + "/requests/" + created["id"] + "/launch",
+                headers={**admin, "Idempotency-Key": str(uuid4())},
+            )
+            assert launched.status_code == 200
+
+    monkeypatch.setattr(server_module, "sleep", fake_sleep)
+
+    async def run():
+        async with Client(server(issued)) as mcp:
+            tools = {tool.name: tool for tool in await mcp.list_tools()}
+            assert tools["wait_for_updates"].annotations.readOnlyHint is True
+            assert tools["wait_for_updates"].inputSchema["properties"] == {}
+            assert (await mcp.call_tool("get_inbox")).structured_content["items"] == []
+            result = await mcp.call_tool("wait_for_updates", raise_on_error=False)
+            assert sleeps == [20]
+            if revoke_during_wait:
+                assert result.is_error and "unauthenticated" in result.content[0].text
+            else:
+                assert not result.is_error
+                assert result.structured_content["items"]
+
+    asyncio.run(run())
+
+
+def test_wait_is_nonblocking_and_client_can_cancel_without_subsequent_api_read(client, monkeypatch):
+    issued, _ = agent(client, scopes=["negotiations:read"])
+
+    async def run():
+        started, cancelled = asyncio.Event(), asyncio.Event()
+        api_reads = []
+        waiting_request_ids = []
+        api = Marketplace(
+            config(issued["token"], issued["workspace_id"]), transport=httpx.ASGITransport(app=app)
+        )
+        request = api.request
+
+        async def track_request(method, path, **kwargs):
+            api_reads.append((method, path))
+            return await request(method, path, **kwargs)
+
+        async def sleeping(seconds):
+            assert seconds == 20
+            waiting_request_ids.append(get_context().request_context.request_id)
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+        monkeypatch.setattr(api, "request", track_request)
+        monkeypatch.setattr(server_module, "sleep", sleeping)
+        async with Client(create_server(api)) as mcp:
+            waiting = asyncio.create_task(mcp.call_tool("wait_for_updates"))
+            await asyncio.wait_for(started.wait(), timeout=2)
+            # The pending sleep must leave other MCP calls able to execute.
+            immediate = await asyncio.wait_for(mcp.call_tool("get_inbox"), timeout=2)
+            assert immediate.structured_content["items"] == []
+            reads_before_cancel = list(api_reads)
+            # Cancelling a local Python task alone does not notify an MCP server.
+            # Use the protocol's explicit cancellation notification, as an AI client does.
+            await mcp.session.send_notification(
+                ClientNotification(
+                    CancelledNotification(
+                        params=CancelledNotificationParams(requestId=waiting_request_ids[0])
+                    )
+                )
+            )
+            with pytest.raises(McpError, match="cancelled"):
+                await asyncio.wait_for(waiting, timeout=2)
+            await asyncio.wait_for(cancelled.wait(), timeout=2)
+            assert api_reads == reads_before_cancel
 
     asyncio.run(run())

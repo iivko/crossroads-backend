@@ -1507,6 +1507,29 @@
             }
           },
           {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "chairs",
+                    "desks",
+                    "cabinets",
+                    "laptops",
+                    "headphones"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
             "name": "material",
             "in": "query",
             "required": false,
@@ -8279,6 +8302,176 @@
         "x-object-label": "instructions"
       }
     },
+    "/api/v1/agent/prompt": {
+      "post": {
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Agent Prompt",
+        "description": "Generate a role-specific external negotiator prompt without persisting data or starting an agent. Role/workspace come from authentication; negotiations:read is required. Optionally target one participant room or one owned buyer request, never both. Objectives cannot change permissions or hard rules. The external client listens at 20-second intervals while active; final order approvals remain human. Browser requests require Origin and X-CSRF-Token even though generation has no business side effects. No credentials or private business context are automatically embedded.\n\nReturns `agent_prompt` and `status_code` (200). All failures use `error` and the matching HTTP `status_code`. Requires an authorized workspace membership and applicable role/scopes.",
+        "operationId": "agent_prompt",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentPromptInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPromptResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or unsupported action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or revoked authentication.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, scope, workspace, browser approval or CSRF check failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource does not exist or is not visible to this workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "HTTP method is not supported by this resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, conflicting state, active claim or idempotency conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body or image exceeds the configured limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Input validation, commercial policy or eligibility check failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. Retry after the current rate window.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server failure. Details are not disclosed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "BrowserSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Workspace-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Select a user membership. A workspace-bound agent cannot select another workspace."
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required for browser writes; must match a configured allowed origin."
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required for browser writes; copy the readable market_csrf cookie. Bearer writes do not use CSRF."
+          }
+        ],
+        "x-object-label": "agent_prompt"
+      }
+    },
     "/api/v1/agent/inbox": {
       "get": {
         "tags": [
@@ -9478,6 +9671,117 @@
         ],
         "title": "ActivityResponse"
       },
+      "AgentPrompt": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "title": "Prompt",
+            "description": "Provider-neutral instructions to copy into a connected external AI client."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "buyer",
+              "seller"
+            ],
+            "title": "Role"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "poll_interval_seconds": {
+            "type": "integer",
+            "const": 20,
+            "title": "Poll Interval Seconds"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "start",
+              "resume"
+            ],
+            "title": "Mode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prompt",
+          "role",
+          "workspace_id",
+          "poll_interval_seconds",
+          "mode"
+        ],
+        "title": "AgentPrompt"
+      },
+      "AgentPromptInput": {
+        "properties": {
+          "objective": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Objective",
+            "description": "Private strategy for the external agent.",
+            "default": ""
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "start",
+              "resume"
+            ],
+            "title": "Mode",
+            "default": "start"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AgentPromptInput"
+      },
+      "AgentPromptResponse": {
+        "properties": {
+          "agent_prompt": {
+            "$ref": "#/components/schemas/AgentPrompt"
+          },
+          "status_code": {
+            "type": "integer",
+            "const": 200,
+            "title": "Status Code",
+            "description": "Equals the HTTP response status."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agent_prompt",
+          "status_code"
+        ],
+        "title": "AgentPromptResponse"
+      },
       "Approval": {
         "properties": {
           "workspace_id": {
@@ -9622,7 +9926,8 @@
             "enum": [
               "polypropylene",
               "wood",
-              "fabric"
+              "fabric",
+              "mixed"
             ],
             "title": "Material"
           },
@@ -9879,7 +10184,13 @@
         "properties": {
           "id": {
             "type": "string",
-            "const": "chairs",
+            "enum": [
+              "chairs",
+              "desks",
+              "cabinets",
+              "laptops",
+              "headphones"
+            ],
             "title": "Id"
           },
           "name": {
@@ -12291,7 +12602,13 @@
           },
           "category": {
             "type": "string",
-            "const": "chairs",
+            "enum": [
+              "chairs",
+              "desks",
+              "cabinets",
+              "laptops",
+              "headphones"
+            ],
             "title": "Category",
             "default": "chairs"
           },
@@ -12414,7 +12731,13 @@
           },
           "category": {
             "type": "string",
-            "const": "chairs",
+            "enum": [
+              "chairs",
+              "desks",
+              "cabinets",
+              "laptops",
+              "headphones"
+            ],
             "title": "Category",
             "default": "chairs"
           },
@@ -12521,7 +12844,13 @@
           },
           "category": {
             "type": "string",
-            "const": "chairs",
+            "enum": [
+              "chairs",
+              "desks",
+              "cabinets",
+              "laptops",
+              "headphones"
+            ],
             "title": "Category",
             "default": "chairs"
           },
@@ -12749,7 +13078,13 @@
           },
           "category": {
             "type": "string",
-            "const": "chairs",
+            "enum": [
+              "chairs",
+              "desks",
+              "cabinets",
+              "laptops",
+              "headphones"
+            ],
             "title": "Category"
           },
           "quantity": {
@@ -12757,12 +13092,20 @@
             "title": "Quantity"
           },
           "material": {
-            "type": "string",
-            "enum": [
-              "any",
-              "polypropylene",
-              "wood",
-              "fabric"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "polypropylene",
+                  "wood",
+                  "fabric",
+                  "mixed"
+                ]
+              },
+              {
+                "type": "string",
+                "const": "any"
+              }
             ],
             "title": "Material"
           },
@@ -12899,7 +13242,13 @@
           },
           "category": {
             "type": "string",
-            "const": "chairs",
+            "enum": [
+              "chairs",
+              "desks",
+              "cabinets",
+              "laptops",
+              "headphones"
+            ],
             "title": "Category",
             "default": "chairs"
           },
@@ -12910,12 +13259,20 @@
             "title": "Quantity"
           },
           "material": {
-            "type": "string",
-            "enum": [
-              "any",
-              "polypropylene",
-              "wood",
-              "fabric"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "polypropylene",
+                  "wood",
+                  "fabric",
+                  "mixed"
+                ]
+              },
+              {
+                "type": "string",
+                "const": "any"
+              }
             ],
             "title": "Material"
           },
@@ -12987,7 +13344,13 @@
           },
           "category": {
             "type": "string",
-            "const": "chairs",
+            "enum": [
+              "chairs",
+              "desks",
+              "cabinets",
+              "laptops",
+              "headphones"
+            ],
             "title": "Category",
             "default": "chairs"
           },
@@ -12998,12 +13361,20 @@
             "title": "Quantity"
           },
           "material": {
-            "type": "string",
-            "enum": [
-              "any",
-              "polypropylene",
-              "wood",
-              "fabric"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "polypropylene",
+                  "wood",
+                  "fabric",
+                  "mixed"
+                ]
+              },
+              {
+                "type": "string",
+                "const": "any"
+              }
             ],
             "title": "Material"
           },

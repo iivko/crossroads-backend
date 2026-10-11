@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from typing import get_args
 
 from fastapi import Depends, FastAPI, File, Form, Header, Query, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
@@ -12,6 +13,7 @@ from starlette.exceptions import HTTPException
 
 from . import conversation, media, storage
 from . import service as s
+from .agent_prompts import POLL_INTERVAL_SECONDS, render_negotiator_prompt
 from .auth import ROLE_SCOPES, Actor, actor, check_origin, create_agent, login, throttle
 from .config import settings
 from .db import now, session
@@ -34,13 +36,16 @@ from .models import (
 from .responses import IDEMPOTENT_OPERATIONS, ResourceRouter
 from .schemas import (
     ActionInput,
+    AgentPromptInput,
     ApprovalInput,
     BriefInput,
+    CategoryID,
     CoverInput,
     CredentialInput,
     GalleryInput,
     GuidanceInput,
     Login,
+    Material,
     PolicyInput,
     ProductInput,
     ProductUpdate,
@@ -255,14 +260,15 @@ def credentials_revoke(credential_id: str, a: Actor = Depends(writer)):
 def categories(a: Actor = Depends(actor)):
     return [
         {
-            "id": "chairs",
-            "name": "Chairs",
+            "id": category,
+            "name": category.title(),
             "attributes": {
-                "material": ["polypropylene", "wood", "fabric"],
+                "material": list(get_args(Material)),
                 "stackable": "boolean",
                 "color": "string",
             },
         }
+        for category in get_args(CategoryID)
     ]
 
 
@@ -270,6 +276,7 @@ def categories(a: Actor = Depends(actor)):
 def products(
     q: str = Query("", max_length=100),
     own: bool = False,
+    category: CategoryID | None = None,
     material: str | None = None,
     destination: str | None = None,
     limit: int = Query(50, ge=1, le=100),
@@ -286,6 +293,8 @@ def products(
         query = query.where(
             or_(Product.data["name"].as_string().ilike("%" + q + "%"), Product.sku.ilike("%" + q + "%"))
         )
+    if category:
+        query = query.where(Product.data["category"].as_string() == category)
     if material:
         query = query.where(Product.data["attributes"]["material"].as_string() == material)
     rows = list(a.db.scalars(query.order_by(Product.created_at.desc())))
@@ -771,6 +780,29 @@ def instructions(a: Actor = Depends(actor)):
         "action_schema": ActionInput.model_json_schema(),
         "request_schema": RequestInput.model_json_schema(),
         "product_schema": ProductInput.model_json_schema(),
+    }
+
+
+@api.post("/agent/prompt")
+def agent_prompt(data: AgentPromptInput, a: Actor = Depends(actor)):
+    a.need("negotiations:read")
+    if data.room_id is not None:
+        s.room_for(a, data.room_id)
+    if data.request_id is not None:
+        require(a.role == "buyer", "permission_denied", "Only buyers can target purchase requests", 403)
+        purchase = a.db.get(PurchaseRequest, data.request_id)
+        require(
+            purchase is not None and purchase.workspace_id == a.workspace.id,
+            "request_not_found",
+            "Purchase request not found",
+            404,
+        )
+    return {
+        "prompt": render_negotiator_prompt(role=a.role, workspace_id=a.workspace.id, data=data),
+        "role": a.role,
+        "workspace_id": a.workspace.id,
+        "poll_interval_seconds": POLL_INTERVAL_SECONDS,
+        "mode": data.mode,
     }
 
 

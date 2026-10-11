@@ -1,7 +1,11 @@
 from datetime import date
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+CategoryID = Literal["chairs", "desks", "cabinets", "laptops", "headphones"]
+Material = Literal["polypropylene", "wood", "fabric", "mixed"]
+RequestMaterial = Material | Literal["any"]
 
 
 class Strict(BaseModel):
@@ -19,8 +23,23 @@ class CredentialInput(Strict):
     expires_days: int = Field(default=30, ge=1, le=90)
 
 
+class AgentPromptInput(Strict):
+    objective: str = Field(
+        default="", max_length=2000, description="Private strategy for the external agent."
+    )
+    room_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
+    request_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
+    mode: Literal["start", "resume"] = "start"
+
+    @model_validator(mode="after")
+    def one_target(self):
+        if self.room_id is not None and self.request_id is not None:
+            raise ValueError("Choose either room_id or request_id, not both")
+        return self
+
+
 class Attributes(Strict):
-    material: Literal["polypropylene", "wood", "fabric"]
+    material: Material
     stackable: bool
     color: str = Field(min_length=1, max_length=60)
 
@@ -29,7 +48,7 @@ class ProductInput(Strict):
     name: str = Field(min_length=3, max_length=120)
     description: str = Field(default="", max_length=2000)
     sku: str = Field(min_length=2, max_length=50)
-    category: Literal["chairs"] = "chairs"
+    category: CategoryID = "chairs"
     attributes: Attributes
     unit_price: int = Field(
         gt=0,
@@ -84,9 +103,9 @@ class PolicyInput(Strict):
 class RequestInput(Strict):
     title: str = Field(min_length=3, max_length=120)
     description: str = Field(default="", max_length=3000)
-    category: Literal["chairs"] = "chairs"
+    category: CategoryID = "chairs"
     quantity: int = Field(ge=1, le=10000)
-    material: Literal["any", "polypropylene", "wood", "fabric"]
+    material: RequestMaterial
     stackable: bool
     destination: str = Field(min_length=2, max_length=100)
     latest_delivery: date
@@ -220,7 +239,7 @@ class RequirementInput(Strict):
                 or self.operator != "eq"
             ):
                 raise ValueError("This requirement needs a nonempty text equality")
-            if self.field == "material" and self.value not in ("polypropylene", "wood", "fabric"):
+            if self.field == "material" and self.value not in get_args(Material):
                 raise ValueError("Use a supported product material")
         elif self.field == "delivery_date":
             if not isinstance(self.value, str):

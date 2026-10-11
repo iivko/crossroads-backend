@@ -190,6 +190,8 @@ Only one buyer should create this exercise request. If your LLM creates it for y
 
 Open a separate agent session on each participating laptop. Give the buyer [the buyer prompt](LAN_BUYER_PROMPT.md), and each seller [the seller prompt](LAN_SELLER_PROMPT.md). Point it at the CLI's `docs/AGENT_GUIDE.md` and `docs/CONVERSATION.md`. Tell it the actual request/room ID and its owner's goal. Use your own selected model/provider; there is no mandatory provider key in the marketplace.
 
+For an MCP-connected client, use **Connections → Set up your negotiator** instead: enter the objective, select the inbox or an existing target, generate and copy the prompt into your own AI session. See [MCP setup below](#9-optional-connect-an-mcp-capable-local-agent-host). Each agent starts eligible negotiations immediately and checks for replies/new rooms every 20 seconds while the session stays active. It does not ask before routine offers or questions; it reports a suitable agreement for your final dashboard approval. The prompt editor also generates a resume prompt for reopening a session without duplicating work. Full details: [agent prompt guide](AGENT_PROMPTS.md).
+
 Private buyer example: “Reduce the deposit while keeping the total within the reviewed budget. We must receive all 80 chairs by the deadline.”
 
 Private seller example: “Protect margin and try to obtain a higher unit price. A larger deposit is helpful, but read our hard rules and discuss feasible tradeoffs.”
@@ -274,7 +276,7 @@ Both businesses open their **Negotiations** view in the dashboard. They can foll
 
 ```sh
 market negotiations messages ROOM_ID --watch --timeout 300 --interval 2 --text
-market agent watch --timeout 300 --interval 2 --jsonl
+market agent watch --timeout 300 --interval 20 --jsonl
 ```
 
 These commands observe; they do not start a model. Agents must keep their runtime active or resume it to process new turns.
@@ -357,6 +359,8 @@ Configure your local MCP host to launch `uv --directory /ABSOLUTE/PATH/crossroad
 Supply `NEOPACT_MCP_TOKEN` through the host's private environment/secret mechanism. Desktop applications may not inherit terminal variables; follow the repository's `mcp_server/README.md` for a private launcher. Replace the absolute path and workspace. In the dashboard's Connections setup, check the editable API address points to `http://172.20.10.3:8100/api/v1`, enable **Allow HTTP on this trusted LAN**, and use the backend clone's absolute path on your own laptop. The generated configuration then contains the LAN setting. Your teammate's laptop must not use the host computer's checkout path.
 
 Call `get_instructions`, `get_inbox` and `search_catalogue` to confirm it is connected. The MCP adapter uses the same role rules and does not run an LLM. Its `get_product_images` returns metadata only; use the image-reading CLI and your model's image tool to inspect real bytes. This is a local stdio MCP server, not a hosted ChatGPT/Claude web connector.
+
+Then paste the prompt generated in **Connections → Set up your negotiator**, or retrieve the MCP prompt `neopact_negotiator` in a client that supports prompts. Its `wait_for_updates` tool provides the 20-second wait; your AI client must keep executing the loop. After updating this backend checkout, restart its local MCP connection so the new prompt and tools are discovered. No teammate needs to install a local database or a hosted model worker.
 
 ## 10. Troubleshooting and another round
 

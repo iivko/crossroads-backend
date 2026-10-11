@@ -83,11 +83,11 @@ Secrets appear only at issuance. Store tokens privately; never put them in URLs,
 - Delivery is charged once: `total = unit_price × quantity + delivery_charge`. This demo has no separate tax calculation or payments.
 - Dates use `YYYY-MM-DD`; timestamps are UTC ISO 8601. IDs are opaque strings.
 - Unknown structured input fields are rejected. Do not send read-only IDs, images, computed totals or `version` as product/action input; mutation inputs use `expected_version` where specified.
-- Current category is `chairs`; materials are `polypropylene`, `wood`, `fabric`. Requests also allow `any`.
+- Supported categories are `chairs`, `desks`, `cabinets`, `laptops` and `headphones`; materials are `polypropylene`, `wood`, `fabric` and `mixed` (for products made from multiple materials). Requests also allow `any`. Existing inputs still default to `chairs` when category is omitted. Laptop and headphone requests use separate categories to avoid matching the wrong type of electronics.
 - Paginated products, requests, negotiations and orders contain `items`, `total`, `offset`, `limit`; default limit 50, maximum 100. Activity omits `total` and allows up to 200.
 - Workspaces, credentials, categories, images, product/rule history and matches contain `items` without pagination. Inbox returns up to the first 100 participant rooms.
 
-Product filters: `q` searches name/SKU; `own=true` selects the current workspace's products; `material` and `destination` narrow results. Other sellers' unpublished products are hidden. Negotiations accept `state`; activity accepts `resource_id`.
+Product filters: `q` searches name/SKU; `own=true` selects the current workspace's products; `category`, `material` and `destination` narrow results. Other sellers' unpublished products are hidden. Buyer requests match only products in their selected category. Negotiations accept `state`; activity accepts `resource_id`.
 
 ## Endpoint reference
 
@@ -164,6 +164,7 @@ Rule endpoints optionally accept `product_id`. Product rules belong to the ownin
 | GET | `/orders/{order_id}` | 200 `order` | Participant; immutable terms, evidence and approvals |
 | GET | `/activity` | 200 `activity` | negotiations:read; workspace audit events |
 | GET | `/agent/instructions` | 200 `instructions` | Role/scopes, workflow and structured input schemas |
+| POST | `/agent/prompt` | 200 `agent_prompt` | negotiations:read; generate a private role-aware start/resume prompt without launching an agent |
 | GET | `/agent/inbox` | 200 `inbox` | negotiations:read; room/turn discovery |
 
 ## Direct HTTP examples
@@ -402,6 +403,25 @@ Product/stock/gallery and policy writes require expected_version; request edits 
 | 500 | internal_error | Report failure; retry only with operation safeguards |
 
 Validation details are a list of `{ "field": "body.unit_price", "message": "..." }`; other errors may use an object or null. Branch on HTTP status and error.code, not human wording. Sensitive invalid inputs and internal tracebacks are not echoed in responses. Protected responses use Cache-Control: no-store.
+
+## Negotiator prompt generation
+
+`POST /agent/prompt` produces the same instructions used by Connections and the MCP `neopact_negotiator` prompt. It derives the buyer/seller role and workspace from authentication. It does not persist the objective, start a model, create a request or submit an offer. Browser callers must supply their allowed Origin and CSRF token as for other POSTs; agent callers use their restricted bearer credential.
+
+```json
+{
+  "objective": "Preserve cash while meeting the existing delivery requirements.",
+  "room_id": null,
+  "request_id": null,
+  "mode": "start"
+}
+```
+
+`objective` defaults to an empty string and is limited to 2,000 characters. `room_id` optionally limits work to a participant room. `request_id` is buyer-only and must belong to the authenticated buyer. The targets are mutually exclusive; neither means watch the workspace inbox. `mode` is `start` or `resume`. Inaccessible targets are rejected instead of turning into broader workspace access. No role or token field is accepted.
+
+The response is `{"agent_prompt":{"prompt":"…","role":"buyer","workspace_id":"…","poll_interval_seconds":20,"mode":"start"},"status_code":200}`. The generated text instructs the external client to begin authorized negotiations immediately, wait 20 seconds between reply/inbox checks, and recommend verified feasible terms for final human approval. Prompt generation does not embed tokens or automatically insert private policy values. User-supplied objectives remain private business text and never override authorization or hard rules.
+
+MCP `wait_for_updates()` performs the bounded asynchronous wait and then calls the existing `/agent/inbox`; it does not add a background job or HTTP wait endpoint. The external client owns the continuing loop. See the [complete prompt workflow](AGENT_PROMPTS.md).
 
 ## Migration and generated clients
 

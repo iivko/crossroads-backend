@@ -97,19 +97,32 @@ NEOPACT_MCP_WORKSPACE = "ws-buyer"
 
 For a GUI host without an inherited token environment, configure the private secret-store launcher as `command` instead.
 
+## Start negotiating from a prompt
+
+After connecting your client, open the dashboard's **Connections → Set up your negotiator**. Describe your objective, choose the workspace inbox or an existing target, generate the prompt and paste it into your connected AI client. Its buyer/seller role comes from the authenticated workspace. The prompt and the private MCP configuration have separate copy controls.
+
+Clients with MCP prompt support can retrieve **`neopact_negotiator`** instead. Optional arguments are `objective` (up to 2,000 characters), `room_id` or buyer-only `request_id` (mutually exclusive), and `mode` (`start` or `resume`). Both routes use the same API template. There is no role override or credential argument.
+
+The agent starts permitted negotiations immediately without asking before routine messages and offers. When waiting for a reply or new work, it calls **`wait_for_updates()`**, which waits 20 seconds asynchronously and reads the inbox. It repeats while its AI session remains active, discusses business needs, respects private limits, compares feasible terms and reports an agreement for human review. The seller seeks a price above its effective private minimum; the buyer optimizes according to its owner's requirements and priorities.
+
+Keep the AI client running. Prompt retrieval does not start a model, create a daemon or bypass the client's own tool approvals. An empty inbox means the agent should wait, not stop. Missing essential requirements need a private clarification; final approval of an order still belongs to both humans. See the [prompt workflow and limitations](../docs/AGENT_PROMPTS.md).
+
 ## Available tools
 
 | Tools | Required capability |
 | --- | --- |
 | `get_instructions` | Valid configured agent identity |
 | `search_catalogue`, `get_product_images` | Catalogue/image reading |
-| `get_inbox`, `get_negotiation_context`, `get_activity` | Negotiation reading |
+| `get_inbox`, `wait_for_updates`, `get_negotiation_context`, `get_activity` | Negotiation reading |
 | `get_orders` | Order reading |
+| `list_purchase_requests`, `get_purchase_request` | Buyer request access (the API requires `requests:write` for these reads) |
 | `create_request`, `launch_request` | Buyer request writing |
 | `create_product`, `update_product` | Seller product writing |
 | `claim_turn`, `submit_action` | Negotiation actions |
 
 Tool inputs use the backend's `RequestInput`, `ProductInput`, `ProductUpdate` and `ActionInput` models directly. Money is integer EUR cents. Writes require the backend's exact expected version and/or a stable idempotency key. After a timeout, the write outcome is unknown; inspect state or retry the same intended mutation with the same key. A conflict requires fresh context, not an automatic retry against changed terms.
+
+Products and buyer requests support `chairs`, `desks`, `cabinets`, `laptops` and `headphones`. Use `search_catalogue(category="laptops")` to filter by category; omit it to search the whole visible catalogue. The `mixed` material supports products made from multiple materials. Restart a running MCP server after updating its tool schemas.
 
 `get_product_images` returns metadata, not image bytes; it must not be described as visual inspection. Use the repository's existing image-reading CLI with an appropriately scoped agent when a task requires viewing the actual images.
 
@@ -136,7 +149,7 @@ Official references checked October 10, 2026:
 With the existing PostgreSQL container running:
 
 ```sh
-uv run --extra mcp pytest tests/test_mcp.py -q
+uv run --extra mcp pytest tests/test_mcp.py tests/test_agent_prompts.py -q
 ```
 
 The backend-backed tests use a private temporary database schema and do not reset or consume the demo market. They check role/workspace isolation, read-only scope denial, credential revocation, structured schemas and annotations, stale versions, idempotency, fixed-origin requests and credential-safe errors.

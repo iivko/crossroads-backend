@@ -13,7 +13,7 @@ from typing import Any, Generic, Literal, TypeVar
 from fastapi import APIRouter, Response
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
-from .schemas import BuyerPolicy, ProductInput, SellerPolicy
+from .schemas import BuyerPolicy, CategoryID, ProductInput, RequestMaterial, SellerPolicy
 
 Role = Literal["buyer", "seller"]
 State = Literal[
@@ -123,7 +123,7 @@ class CategoryAttributes(DTO):
 
 
 class Category(DTO):
-    id: Literal["chairs"]
+    id: CategoryID
     name: str
     attributes: CategoryAttributes
 
@@ -194,9 +194,9 @@ class PurchaseRequest(DTO):
     version: int
     created_at: datetime
     title: str
-    category: Literal["chairs"]
+    category: CategoryID
     quantity: int
-    material: Literal["any", "polypropylene", "wood", "fabric"]
+    material: RequestMaterial
     stackable: bool
     destination: str
     latest_delivery: date
@@ -456,6 +456,16 @@ class InboxItem(DTO):
     pending_guidance_id: str | None
 
 
+class AgentPrompt(DTO):
+    prompt: str = Field(
+        description="Provider-neutral instructions to copy into a connected external AI client."
+    )
+    role: Role
+    workspace_id: str
+    poll_interval_seconds: Literal[20]
+    mode: Literal["start", "resume"]
+
+
 T = TypeVar("T")
 
 
@@ -526,6 +536,7 @@ CONTRACTS = {
     "orders_show": ("order", Order, False),
     "activity": ("activity", ActivityPage, False),
     "instructions": ("instructions", Instructions, False),
+    "agent_prompt": ("agent_prompt", AgentPrompt, False),
     "inbox": ("inbox", Items[InboxItem], False),
 }
 
@@ -579,6 +590,7 @@ DESCRIPTIONS = {
     "orders_show": "Read a confirmed order's immutable terms, product evidence and approvals. Only its buyer and seller may access it.",
     "activity": "Read workspace-visible audit events, optionally filtered by resource ID. This feed uses offset/limit pagination without a total count.",
     "instructions": "Read role-specific agent instructions, effective scopes and JSON Schemas for structured requests, products and actions.",
+    "agent_prompt": "Generate a role-specific external negotiator prompt without persisting data or starting an agent. Role/workspace come from authentication; negotiations:read is required. Optionally target one participant room or one owned buyer request, never both. Objectives cannot change permissions or hard rules. The external client listens at 20-second intervals while active; final order approvals remain human. Browser requests require Origin and X-CSRF-Token even though generation has no business side effects. No credentials or private business context are automatically embedded.",
     "inbox": "Read up to 100 participant rooms with current turn availability and links to role-scoped context.",
 }
 

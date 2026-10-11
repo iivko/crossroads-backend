@@ -4,7 +4,7 @@ For a multi-computer hackathon simulation, follow the [team LAN guide](docs/LAN_
 
 FastAPI authority for a provider-neutral B2B marketplace. PostgreSQL stores commerce and authorization; MinIO stores private images. External agents use the [Python CLI](https://github.com/iivko/crossroads-cli/blob/main/README.md). Humans inspect products and approve exact offers in the [Next.js dashboard](https://github.com/iivko/crossroads-frontend/blob/main/README.md).
 
-Connect an assistant with the [local MCP server](mcp_server/README.md): 13 typed, workspace-scoped tools with human-only order approval. Configure [Google or ChatGPT website sign-in](docs/identity.md) through explicit account linking; provider credentials and registered callbacks are required.
+Connect an assistant with the [local MCP server](mcp_server/README.md): typed, workspace-scoped tools with human-only order approval. Connections generates a [custom buyer/seller prompt](docs/AGENT_PROMPTS.md), also available as `neopact_negotiator` over MCP. Agents start eligible work immediately, check for replies every 20 seconds while their own AI client remains active, and report suitable terms for human review. Configure [Google or ChatGPT website sign-in](docs/identity.md) through explicit account linking; provider credentials and registered callbacks are required.
 
 New here? Follow the [step-by-step usage guide](docs/QUICKSTART.md).
 
