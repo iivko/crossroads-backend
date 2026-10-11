@@ -1,5 +1,7 @@
 # Crossroads backend
 
+For a multi-computer hackathon simulation, follow the [team LAN guide](docs/LAN_TEAM_GUIDE.md).
+
 FastAPI authority for a provider-neutral B2B marketplace. PostgreSQL stores commerce and authorization; MinIO stores private images. External agents use the [Python CLI](https://github.com/iivko/crossroads-cli/blob/main/README.md). Humans inspect products and approve exact offers in the [Next.js dashboard](https://github.com/iivko/crossroads-frontend/blob/main/README.md).
 
 Connect an assistant with the [local MCP server](mcp_server/README.md): 13 typed, workspace-scoped tools with human-only order approval. Configure [Google or ChatGPT website sign-in](docs/identity.md) through explicit account linking; provider credentials and registered callbacks are required.

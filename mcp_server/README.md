@@ -20,7 +20,9 @@ The server requires three environment variables:
 | `NEOPACT_MCP_WORKSPACE` | Exact workspace ID from the issued credential |
 | `NEOPACT_MCP_TOKEN` | Restricted `am_…` agent token, kept in the host's secret environment |
 
-HTTPS is required for non-loopback backends. Browser sessions and administrator CLI credentials are rejected. The token and workspace are checked against `/auth/me` at startup; the backend checks expiry, revocation, membership and scopes again on every call. The server never follows redirects or reads proxy credentials from the environment.
+HTTPS is required for non-loopback backends by default. For a trusted LAN demo only, explicitly set `NEOPACT_MCP_ALLOW_LAN_HTTP=true` and use a literal private IPv4 address (10/8, 172.16/12 or 192.168/16), for example `http://192.168.1.50:8100/api/v1`. This opt-in does not permit public HTTP addresses, hostnames or link-local addresses. HTTP sends credentials and business data without encryption: use only the demo accounts on your trusted network, and use HTTPS for a deployed service. See the [team LAN guide](../docs/LAN_TEAM_GUIDE.md).
+
+Browser sessions and administrator CLI credentials are rejected. The token and workspace are checked against `/auth/me` at startup; the backend checks expiry, revocation, membership and scopes again on every call. The server never follows redirects or reads proxy credentials from the environment.
 
 Run with the environment supplied by your MCP host:
 

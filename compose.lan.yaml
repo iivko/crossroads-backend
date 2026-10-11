@@ -1,0 +1,10 @@
+# Optional trusted-LAN demo. Combine with compose.yaml; loopback bindings remain.
+# Set LAN_BIND_IP to this computer's private IPv4 address, not 0.0.0.0.
+# Database and object storage stay on loopback. No router port forwarding is needed.
+services:
+  api:
+    ports:
+      - "${LAN_BIND_IP:?Set LAN_BIND_IP to the host private IPv4 address}:${API_PORT:-8100}:8100"
+  frontend:
+    ports:
+      - "${LAN_BIND_IP:?Set LAN_BIND_IP to the host private IPv4 address}:${FRONTEND_PORT:-3100}:3100"

@@ -1,6 +1,6 @@
 # Local operations
 
-Run Compose commands from `backend`. Services are `postgres`, `minio`, one-shot `migrate`, `api`, `worker`, and `frontend`. Host bindings are loopback-only. API and UI run as non-root users; object storage is private.
+Run Compose commands from `backend`. Services are `postgres`, `minio`, one-shot `migrate`, `api`, `worker`, and `frontend`. Default host bindings are loopback-only. The optional `compose.lan.yaml` adds only API/UI bindings on a specified LAN interface; PostgreSQL and MinIO remain loopback-only. See the [team LAN guide](LAN_TEAM_GUIDE.md). API and UI run as non-root users; object storage is private.
 
 ## Startup, shutdown and updates
 
